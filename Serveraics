@@ -1,0 +1,316 @@
+# ============================================================
+# SERVER PPDB YASINA CIGOMBONG - FINAL LENGKAP
+# AI CS + AI ADMIN + BROSUR ASLI 2027/2028 + NOTIF OTOMATIS
+# 1 Server untuk semua - Saling Terhubung
+# ============================================================
+import http.server, socketserver, urllib.parse, json, os, sqlite3
+from datetime import datetime
+from collections import Counter
+
+PORT = int(os.environ.get("PORT", 8000))
+DB_FILE = 'database.db'
+
+INFO_YASINA = {
+    "nama": "Pesantren Yasina Cigombong",
+    "yayasan": "Yayasan Yasina Cigombong",
+    "alamat": "Jl. Mayjen H.R Edi Sukma Kp. Pajagan RT 001 RW 008 Ds. Watesjaya Kec. Cigombong Kab. Bogor",
+    "email": "pesantren.yacigo1@gmail.com",
+    "wa_panitia": "0851-4174-8787",
+    "wa_labibah": "0856-2410-1410",
+    "wa_lama": "0895-1446-9108",
+    "tahun": "2027/2028",
+    "pimpinan": "Dr. K.H. Romdon, MH.",
+    "pengasuh": "Hj. Nida Romdon, M.Pd",
+}
+
+BROSUR_ASLI = {
+    "judul": "BROSUR RESMI PPDB PESANTREN YASINA CIGOMBONG TAHUN AJARAN 2027 / 2028",
+    "isi": """Pesantren Yasina Cigombong - SMP, SMA, SMK Yasina Cigombong.
+Pimpinan: Dr. K.H. Romdon, MH.
+Pengasuh: Hj. Nida Romdon, M.Pd
+Alamat: Jl. Mayjen H.R Edi Sukma Kp. Pajagan RT 001 RW 008 Ds. Watesjaya Kec. Cigombong Kab. Bogor.
+
+PROGRAM UNGGULAN PESANTREN DAN SEKOLAH:
+1. Tahfidz Al-Qur'an
+2. Pengajian Kitab Kuning
+3. One Day One Juz
+4. Pramuka Tingkat Nasional
+5. Program 4 Bahasa (Indonesia, Inggris, Arab, Sunda)
+6. Program Kerjasama Dengan Dunia Industri
+7. Kewirausahaan
+8. Tata Busana
+9. Kolaborasi Dengan Universitas Negeri dan Swasta
+
+PROGRAM BEASISWA:
+- Beasiswa Prestasi
+- Beasiswa Pesantren
+
+EKSTRAKURIKULER:
+- Pramuka, Paskibra, English Club, Marawis, Muhadhoroh
+- Pencak Silat, Tenis Meja, Futsal, Kreasi Seni, Marching Band
+""",
+    "biaya": """BIAYA RESMI SESUAI BROSUR 2027/2028:
+
+1. PENDAFTARAN:
+- SMP : Rp 150.000
+- SMA / SMK : Rp 200.000
+
+2. INFAQ SYAHRIAH SEKOLAH (Per Bulan):
+- SMP : Rp 75.000 / bulan
+- SMA / SMK : Rp 150.000 / bulan
+
+3. INFAQ SYAHRIAH PESANTREN (Per Bulan - Untuk Yang Mondok):
+- SMP : Rp 500.000 / bulan
+- SMA / SMK : Rp 550.000 / bulan
+
+CONTOH HITUNGAN PER BULAN:
+- SMP Non Pesantren (Pulang Pergi): Daftar 150rb + 75rb/bulan = 75rb/bulan
+- SMP Pesantren (Mondok): Daftar 150rb + 75rb + 500rb = 575rb/bulan (sudah termasuk makan + asrama + pembinaan)
+- SMA/SMK Non Pesantren: Daftar 200rb + 150rb/bulan
+- SMA/SMK Pesantren (Mondok): Daftar 200rb + 150rb + 550rb = 700rb/bulan
+""",
+    "syarat": """SYARAT PPDB YASINA 2027/2028:
+1. Fotocopy Kartu Keluarga (KK) - 2 lembar
+2. Fotocopy Akta Kelahiran - 2 lembar
+3. Fotocopy Ijazah / SKL - 2 lembar
+4. Fotocopy KTP Ayah & Ibu / Wali
+5. Pas Foto 3x4 - 4 lembar
+6. Fotocopy NISN (jika ada)
+7. Fotocopy KIP / PKH (jika ada, untuk pengajuan Beasiswa)
+8. Untuk Mondok: Surat Keterangan Sehat + Bersedia mengikuti tata tertib pesantren
+9. Isi formulir online ini + Tanda Tangan Digital Santri + Ortu
+""",
+    "jadwal": """INFORMASI GELOMBANG PPDB 2027/2028:
+- GELOMBANG 1: NOVEMBER 2026 - JANUARI 2027
+- GELOMBANG 2: FEBRUARI - APRIL 2027
+- GELOMBANG 3: MEI - JULI 2027
+
+Sekarang sedang GELOMBANG 1 (November 2026 - Januari 2027). Daftar sekarang, kuota masih tersedia.
+""",
+    "kontak": """KONTAK RESMI PPDB YASINA 2027/2028:
+- Admin: 0851-4174-8787
+- Bu Labibah: 0856-2410-1410
+- WA Panitia Lama: 0895-1446-9108
+- Email: pesantren.yacigo1@gmail.com
+- Alamat: Jl. Mayjen H.R Edi Sukma Kp. Pajagan RT 001 RW 008 Ds. Watesjaya Kec. Cigombong Kab. Bogor
+- Pimpinan: Dr. K.H. Romdon, MH.
+- Pengasuh: Hj. Nida Romdon, M.Pd
+"""
+}
+
+def init_db():
+    conn = sqlite3.connect(DB_FILE)
+    conn.execute('''CREATE TABLE IF NOT EXISTS pendaftar (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, no_pendaftaran TEXT, waktu TEXT,
+        tahun_pelajaran TEXT, sekolah TEXT, nama_lengkap TEXT, tempat_lahir TEXT, tanggal_lahir TEXT,
+        nik TEXT, nisn TEXT, agama TEXT, jk TEXT, anak_ke TEXT, dari_bersaudara TEXT,
+        kewarganegaraan TEXT, bahasa TEXT, wa TEXT, rt TEXT, rw TEXT, desa TEXT,
+        kecamatan TEXT, kabupaten TEXT, provinsi TEXT, alamat_lengkap TEXT,
+        tinggal_bersama TEXT, riwayat_sd TEXT, riwayat_smp TEXT, hobi TEXT, ukuran_baju TEXT,
+        nama_ayah TEXT, nama_ibu TEXT, ttl_ayah_tempat TEXT, ttl_ayah_tanggal TEXT,
+        ttl_ibu_tempat TEXT, ttl_ibu_tanggal TEXT, agama_ayah TEXT, agama_ibu TEXT,
+        pendidikan_ayah TEXT, pendidikan_ibu TEXT, pekerjaan_ayah TEXT, pekerjaan_ibu TEXT,
+        penghasilan_ayah TEXT, penghasilan_ibu TEXT, wa_ortu TEXT, catatan TEXT,
+        tempat_daftar TEXT, tanggal_daftar TEXT, ttd_siswa TEXT, ttd_ortu TEXT, status TEXT DEFAULT 'BARU'
+    )''')
+    conn.execute('''CREATE TABLE IF NOT EXISTS chat_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, waktu TEXT, siapa TEXT, pertanyaan TEXT, jawaban TEXT, sudah_dibaca INTEGER DEFAULT 0
+    )''')
+    conn.execute('''CREATE TABLE IF NOT EXISTS brosur (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, judul TEXT, isi TEXT, biaya TEXT, syarat TEXT,
+        jadwal TEXT, kontak TEXT, aktif INTEGER DEFAULT 1, waktu TEXT
+    )''')
+    conn.execute('''CREATE TABLE IF NOT EXISTS notif (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, tipe TEXT, judul TEXT, isi TEXT, waktu TEXT, sudah_dibaca INTEGER DEFAULT 0
+    )''')
+    c = conn.execute("SELECT COUNT(*) FROM brosur").fetchone()[0]
+    if c == 0:
+        conn.execute("INSERT INTO brosur (judul, isi, biaya, syarat, jadwal, kontak, waktu) VALUES (?,?,?,?,?,?,?)",
+        (BROSUR_ASLI["judul"], BROSUR_ASLI["isi"], BROSUR_ASLI["biaya"], BROSUR_ASLI["syarat"], BROSUR_ASLI["jadwal"], BROSUR_ASLI["kontak"],
+         datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+    conn.commit(); conn.close()
+init_db()
+
+FIELDS = ["no_pendaftaran","waktu","tahun_pelajaran","sekolah","nama_lengkap","tempat_lahir","tanggal_lahir","nik","nisn","agama","jk","anak_ke","dari_bersaudara","kewarganegaraan","bahasa","wa","rt","rw","desa","kecamatan","kabupaten","provinsi","alamat_lengkap","tinggal_bersama","riwayat_sd","riwayat_smp","hobi","ukuran_baju","nama_ayah","nama_ibu","ttl_ayah_tempat","ttl_ayah_tanggal","ttl_ibu_tempat","ttl_ibu_tanggal","agama_ayah","agama_ibu","pendidikan_ayah","pendidikan_ibu","pekerjaan_ayah","pekerjaan_ibu","penghasilan_ayah","penghasilan_ibu","wa_ortu","catatan","tempat_daftar","tanggal_daftar","ttd_siswa","ttd_ortu","status"]
+
+def get_brosur():
+    conn = sqlite3.connect(DB_FILE); conn.row_factory = sqlite3.Row
+    r = conn.execute("SELECT * FROM brosur WHERE aktif=1 ORDER BY id DESC LIMIT 1").fetchone()
+    conn.close(); return dict(r) if r else BROSUR_ASLI
+
+def buat_notif(tipe, judul, isi):
+    conn = sqlite3.connect(DB_FILE)
+    conn.execute("INSERT INTO notif (tipe, judul, isi, waktu) VALUES (?,?,?,?)", (tipe, judul, isi, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+    conn.commit(); conn.close()
+
+def simpan(data):
+    conn = sqlite3.connect(DB_FILE); cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM pendaftar"); no = cur.fetchone()[0] + 1
+    tahun = str(data.get('tahun_pelajaran','2027/2028')).split('/')[0]
+    data['no_pendaftaran'] = f"YASINA-{tahun}-{no:04d}"
+    data['waktu'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    data['status'] = 'BARU'
+    cols = [f for f in FIELDS if f in data]
+    cur.execute(f"INSERT INTO pendaftar ({','.join(cols)}) VALUES ({','.join(['?']*len(cols))})", [str(data.get(f,''))[:9000] for f in cols])
+    conn.commit(); conn.close()
+    buat_notif("PENDAFTAR_BARU", f"🔔 Pendaftar Baru: {data.get('nama_lengkap')}",
+               f"{data.get('nama_lengkap')} - {data.get('sekolah')} - WA {data.get('wa')} - No {data['no_pendaftaran']} - {data['waktu']}")
+    return data
+
+def ambil(after_id=0):
+    conn = sqlite3.connect(DB_FILE); conn.row_factory = sqlite3.Row
+    rows = [dict(r) for r in conn.execute("SELECT * FROM pendaftar WHERE id > ? ORDER BY id DESC", (after_id,))]
+    conn.close(); return rows
+
+def stat():
+    conn = sqlite3.connect(DB_FILE)
+    total = conn.execute("SELECT COUNT(*) FROM pendaftar").fetchone()[0]
+    baru = conn.execute("SELECT COUNT(*) FROM pendaftar WHERE status='BARU'").fetchone()[0]
+    notif_baru = conn.execute("SELECT COUNT(*) FROM notif WHERE sudah_dibaca=0").fetchone()[0]
+    chat_baru = conn.execute("SELECT COUNT(*) FROM chat_log WHERE sudah_dibaca=0 AND siapa='CALON SANTRI'").fetchone()[0]
+    conn.close(); return {"total":total,"baru":baru,"notif_baru":notif_baru,"chat_baru":chat_baru}
+
+# ===== AI CS - Jawab Akurat Pakai Brosur Asli =====
+def ai_cs_jawab(pertanyaan, total=0):
+    q = pertanyaan.lower()
+    b = get_brosur()
+    conn = sqlite3.connect(DB_FILE)
+    conn.execute("INSERT INTO chat_log (waktu, siapa, pertanyaan) VALUES (?,?,?)", (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'CALON SANTRI', pertanyaan))
+    conn.commit(); conn.close()
+    footer = f"\n\n---\n📞 Admin: 0851-4174-8787 | Bu Labibah: 0856-2410-1410\n📍 Jl. Mayjen H.R Edi Sukma Kp. Pajagan RT 001 RW 008 Ds. Watesjaya Kec. Cigombong Kab. Bogor\n📧 pesantren.yacigo1@gmail.com"
+    if any(k in q for k in ['biaya','bayar','spp','harga','beasiswa','uang','daftar ulang','mahar','infaq','syahriah','promo','cicil']):
+        j = f"💰 BIAYA RESMI PPDB YASINA 2027/2028 (Sesuai Brosur):\n\n{b.get('biaya','')}\n\nTotal sudah daftar: {total} orang.\n\nBEASISWA:\n- Beasiswa Prestasi\n- Beasiswa Pesantren\nUntuk pengajuan beasiswa, lampirkan bukti prestasi / KIP / PKH saat daftar ulang & hubungi Admin 0851-4174-8787 / Bu Labibah 0856-2410-1410.{footer}"
+    elif any(k in q for k in ['syarat','dokumen','berkas','kk','akta','ijazah','persyaratan','foto','nisn','kip']):
+        j = f"📋 SYARAT LENGKAP PPDB YASINA 2027/2028:\n\n{b.get('syarat','')}{footer}"
+    elif any(k in q for k in ['gelombang','jadwal','kapan','buka','tutup','deadline','daftar sampai','tes','observasi']):
+        j = f"📅 GELOMBANG PPDB YASINA 2027/2028:\n\n{b.get('jadwal','')}\n\nTotal sudah daftar: {total} orang. Sekarang GELOMBANG 1 (Nov 2026 - Jan 2027).{footer}"
+    elif any(k in q for k in ['smp','sma','smk','jurusan','pesantren','mondok','asrama','non pesantren','mplb','ipa','ips','pilihan','bedanya','beda']):
+        j = f"🏫 PILIHAN SEKOLAH YASINA 2027/2028:\n\n1. SMP PESANTREN: Mondok + SMP. Pembinaan Tahfidz, Kitab Kuning, Akhlak.\n2. SMP NON PESANTREN: Pulang Pergi, SMP saja.\n3. SMA PESANTREN: Mondok + SMA IPA/IPS.\n4. SMA NON PESANTREN: Pulang Pergi, SMA saja.\n5. SMK PESANTREN: Mondok + SMK MPLB (Manajemen Perkantoran & Layanan Bisnis).\n6. SMK NON PESANTREN: Pulang Pergi, SMK MPLB saja.\n\nPESANTREN = mondok (tidur di pesantren, makan + pembinaan full). NON PESANTREN = pulang pergi.{footer}"
+    elif any(k in q for k in ['lokasi','alamat','dimana','maps','jalan','cigombong','bogor','stasiun','rute']):
+        j = f"📍 LOKASI LENGKAP YASINA:\n\nJl. Mayjen H.R Edi Sukma Kp. Pajagan RT 001 RW 008 Ds. Watesjaya Kec. Cigombong Kab. Bogor\n\nPatokan: Dekat Stasiun Cigombong, dari Stasiun naik angkot / ojek ke arah Pajagan / Wates Jaya. Dari Jakarta / Depok naik KRL ke Bogor lalu lanjut ke Cigombong.{footer}"
+    elif any(k in q for k in ['brosur','pamflet','leaflet','info lengkap']):
+        j = f"📄 BROSUR RESMI PPDB YASINA 2027/2028:\n\nJudul: {b.get('judul')}\n\n{b.get('isi')}\n\n💰 Biaya:\n{b.get('biaya')}\n\n📋 Syarat:\n{b.get('syarat')}\n\n📅 Jadwal:\n{b.get('jadwal')}{footer}"
+    elif any(k in q for k in ['ekskul','ekstra','pramuka','paskibra','futsal','silat','marawis','marching','english','muhadhoroh']):
+        j = f"🎯 EKSTRAKURIKULER YASINA:\n- Pramuka (Sampai Tingkat Nasional)\n- Paskibra\n- English Club\n- Marawis\n- Muhadhoroh (Latihan Pidato / Dakwah)\n- Pencak Silat\n- Tenis Meja\n- Futsal\n- Kreasi Seni\n- Marching Band\n\nSantri Yasina nggak cuma ngaji, tapi juga aktif organisasi & olahraga.{footer}"
+    elif any(k in q for k in ['unggulan','program','tahfidz','kitab','one day','bahasa','industri','wirausaha','tata busana','universitas']):
+        j = f"⭐ PROGRAM UNGGULAN YASINA:\n1. Tahfidz Al-Qur'an\n2. Pengajian Kitab Kuning\n3. One Day One Juz\n4. Pramuka Tingkat Nasional\n5. Program 4 Bahasa (Indonesia, Inggris, Arab, Sunda)\n6. Kerjasama Dengan Dunia Industri\n7. Kewirausahaan\n8. Tata Busana\n9. Kolaborasi Dengan Universitas Negeri dan Swasta{footer}"
+    elif any(k in q for k in ['pimpinan','pengasuh','romdon','nida','ketua','kepala']):
+        j = f"👳 PIMPINAN PESANTREN YASINA:\n- Pimpinan: Dr. K.H. Romdon, MH.\n- Pengasuh: Hj. Nida Romdon, M.Pd\n\nBeliau yang memimpin Pesantren Yasina Cigombong.{footer}"
+    elif any(k in q for k in ['kontak','hubungi','wa','admin','labibah','nomor','telepon']):
+        j = f"📞 KONTAK RESMI PPDB YASINA 2027/2028:\n- Admin: 0851-4174-8787\n- Bu Labibah: 0856-2410-1410\n- WA Lama: 0895-1446-9108\n- Email: pesantren.yacigo1@gmail.com\n- Alamat: Jl. Mayjen H.R Edi Sukma Kp. Pajagan RT 001 RW 008 Ds. Watesjaya Kec. Cigombong Kab. Bogor{footer}"
+    elif any(k in q for k in ['cara','daftar','isi','formulir','gimana','bagaimana','langkah','ttd','tanda tangan']):
+        j = f"📝 CARA DAFTAR LENGKAP (5 Menit):\n\n1. Isi formulir online ini sesuai KK & Ijazah\n2. Pilih Sekolah (SMP / SMA / SMK, Pesantren / Non Pesantren)\n3. Tanda tangan 2 kotak pakai jari: Calon Santri + Ortu / Wali\n4. Centang persetujuan, klik KIRIM - Dapat No Pendaftaran (contoh: YASINA-2027-0001)\n5. Klik KIRIM BUKTI KE WA PANITIA - Kirim No Pendaftaran ke WA 0851-4174-8787\n6. Datang ke pesantren bawa berkas asli untuk verifikasi & daftar ulang{footer}"
+    elif any(k in q for k in ['mondok','tidur','makan','jadwal harian','kegiatan','hp','boleh bawa','aturan']):
+        j = f"🕌 KEHIDUPAN MONDOK DI YASINA:\n\nSantri Pesantren tinggal di asrama, jadwal harian: Sholat berjamaah, Tahfidz / Ngaji, Sekolah formal (SMP/SMA/SMK), Ekskul, Belajar malam, Pembinaan akhlak.\nMakan: Sudah termasuk di Infaq Pesantren (SMP 500rb / SMA-K 550rb per bulan).\nHP / Gadget: Ada aturan khusus pesantren (dibatasi / dikumpulkan, untuk fokus belajar & tahfidz). Detail aturan dijelaskan saat daftar ulang / orientasi.{footer}"
+    elif any(k in q for k in ['sudah daftar','cek','status','no pendaftaran','terdaftar','diterima','lulus']):
+        j = f"🔍 CEK STATUS PENDAFTARAN:\n\nKalau sudah isi formulir, kamu dapat No Pendaftaran (contoh: YASINA-2027-0001).\nKirim No Pendaftaran + Nama Lengkap ke WA Admin 0851-4174-8787 / Bu Labibah 0856-2410-1410 untuk cek status.{footer}"
+    elif any(k in q for k in ['halo','hai','assalam','selamat','pagi','siang','malam']):
+        j = f"Waalaikumsalam! 👋 Selamat datang di PPDB Pesantren Yasina Cigombong 2027/2028.\n\nSaya AI CS Yasina, jawab otomatis 24 jam pakai Brosur Resmi terbaru.\n\nCoba tanya:\n• 'biaya berapa?' - Biaya & Beasiswa\n• 'syarat apa aja?' - Syarat lengkap\n• 'sekolah apa aja?' - SMP/SMA/SMK\n• 'gelombang kapan?' - Jadwal\n• 'cara daftar gimana?' - Cara daftar\n• 'mondok gimana?' - Kehidupan mondok\n• 'brosur' - Brosur lengkap\n• 'ekskul apa aja?' - Ekstrakurikuler\n• 'kontak' - No Admin{footer}"
+    else:
+        j = f"Terima kasih! 🙏 Saya AI CS Yasina, balas otomatis pakai Brosur Resmi 2027/2028.\n\nCoba ketik:\n• 'biaya berapa?'\n• 'syarat apa aja?'\n• 'sekolah apa aja?'\n• 'gelombang kapan?'\n• 'cara daftar gimana?'\n• 'mondok gimana?'\n• 'brosur'\n• 'kontak'\n\nAtau WA Admin 0851-4174-8787 / Bu Labibah 0856-2410-1410.{footer}"
+    conn = sqlite3.connect(DB_FILE)
+    conn.execute("UPDATE chat_log SET jawaban=? WHERE pertanyaan=? ORDER BY id DESC LIMIT 1", (j, pertanyaan))
+    conn.commit(); conn.close()
+    buat_notif("CHAT_BARU", f"💬 Chat Baru dari Calon Santri", f"Pertanyaan: {pertanyaan}\nDijawab AI CS otomatis.")
+    return j
+
+# ===== AI ADMIN =====
+def ai_admin_jawab(pertanyaan):
+    q = pertanyaan.lower()
+    data = ambil(0); total = len(data)
+    b = get_brosur()
+    if any(k in q for k in ['brosur']):
+        return f"📄 BROSUR AKTIF:\nJudul: {b.get('judul')}\nIsi: {str(b.get('isi'))[:500]}...\nBiaya: {str(b.get('biaya'))[:500]}...\nJadwal: {b.get('jadwal')}\nKontak: {b.get('kontak')}\n\nUntuk ganti brosur, isi form Brosur di atas lalu klik SIMPAN BROSUR. AI CS langsung pakai brosur baru."
+    if total == 0 and 'chat' not in q and 'notif' not in q:
+        return "Belum ada pendaftar. Tapi Brosur sudah aktif, AI CS sudah bisa jawab pakai brosur 2027/2028."
+    per_sekolah = Counter([d.get('sekolah','-') for d in data])
+    per_jk = Counter([d.get('jk','-') for d in data])
+    terbaru = data[0] if data else {}
+    ringkasan_sekolah = "\n".join([f"• {k}: {v} orang" for k,v in per_sekolah.items()])
+    ringkasan_jk = "\n".join([f"• {k}: {v} orang" for k,v in per_jk.items()])
+    if any(k in q for k in ['rangkum','laporan','rekap','total','berapa','statistik']):
+        j = f"📊 LAPORAN AI ADMIN - PPDB YASINA 2027/2028:\n\nTotal Pendaftar: {total} orang\n\nPer Sekolah:\n{ringkasan_sekolah}\n\nPer Jenis Kelamin:\n{ringkasan_jk}\n\nPendaftar Terbaru: {terbaru.get('nama_lengkap')} - {terbaru.get('sekolah')} - {terbaru.get('waktu')}\n\nBrosur Aktif: {b.get('judul')}\n\nSaran AI: Fokus follow-up ke sekolah yang paling banyak peminatnya. Kirim WA reminder ke yang belum kirim berkas."
+    elif any(k in q for k in ['baru','terbaru','terakhir','notif','pemberitahuan']):
+        conn = sqlite3.connect(DB_FILE); conn.row_factory = sqlite3.Row
+        notifs = [dict(r) for r in conn.execute("SELECT * FROM notif ORDER BY id DESC LIMIT 5")]; conn.close()
+        j = "🔔 NOTIF TERBARU (Otomatis):\n\n" + "\n".join([f"• [{n.get('waktu')}] {n.get('judul')} - {n.get('isi')}" for n in notifs]) + f"\n\n🆕 5 PENDAFTAR TERBARU:\n" + "\n".join([f"{i+1}. {d.get('nama_lengkap')} - {d.get('sekolah')} - WA {d.get('wa')} - {d.get('waktu')}" for i,d in enumerate(data[:5])])
+    elif any(k in q for k in ['belum','kurang','lengkap','berkas','ttd']):
+        belum = [d for d in data if not d.get('ttd_siswa') or not d.get('ttd_ortu')]
+        j = f"⚠️ BELUM LENGKAP TTD: {len(belum)} orang\n\n" + ("\n".join([f"• {d.get('nama_lengkap')} - {d.get('sekolah')} - WA {d.get('wa')}" for d in belum[:10]]) if belum else "Semua sudah lengkap TTD.")
+    elif any(k in q for k in ['chat','tanya','calon','cs']):
+        conn = sqlite3.connect(DB_FILE); conn.row_factory = sqlite3.Row
+        chats = [dict(r) for r in conn.execute("SELECT * FROM chat_log WHERE siapa='CALON SANTRI' ORDER BY id DESC LIMIT 10")]; conn.close()
+        if not chats: return "Belum ada chat ke AI CS."
+        j = "💬 CHAT TERAKHIR (Sudah dibalas AI CS otomatis):\n\n" + "\n".join([f"• [{c.get('waktu')}] {c.get('pertanyaan')} → {str(c.get('jawaban',''))[:120]}..." for c in chats])
+    else:
+        j = f"AI Admin siap. Total: {total} orang. Brosur: {b.get('judul')}\nCoba:\n• 'Rangkum data'\n• 'Notif terbaru'\n• 'Siapa yang baru daftar?'\n• 'Chat apa aja yang masuk?'\n• 'Brosur apa?'"
+    conn = sqlite3.connect(DB_FILE)
+    conn.execute("INSERT INTO chat_log (waktu, siapa, pertanyaan, jawaban) VALUES (?,?,?,?)", (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'ADMIN', pertanyaan, j))
+    conn.commit(); conn.close()
+    return j
+
+def baca_html(nama):
+    try: return open(nama, encoding='utf-8').read()
+    except: return f"<h1>File {nama} belum diupload.</h1>"
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def end_headers(self):
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        super().end_headers()
+    def do_OPTIONS(self): self.send_response(200); self.end_headers()
+    def do_GET(self):
+        if self.path in ('/','/index.html'): self.kirim_html(baca_html('index.html'))
+        elif self.path in ('/admin','/admin.html'): self.kirim_html(baca_html('admin.html'))
+        elif self.path == '/api/data': self.kirim_json(ambil(0))
+        elif self.path == '/api/brosur': self.kirim_json(get_brosur())
+        elif self.path == '/api/info': self.kirim_json(INFO_YASINA)
+        elif self.path.startswith('/api/baru'):
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            after = int(q.get('after_id',[0])[0])
+            self.kirim_json({"data": ambil(after), "stat": stat()})
+        elif self.path == '/api/ping': self.kirim_json({"status":"ok","total":stat()["total"]})
+        elif self.path == '/api/notif':
+            conn = sqlite3.connect(DB_FILE); conn.row_factory = sqlite3.Row
+            rows = [dict(r) for r in conn.execute("SELECT * FROM notif ORDER BY id DESC LIMIT 20")]; conn.close()
+            self.kirim_json({"notif": rows, "stat": stat()})
+        elif self.path == '/api/chat-log':
+            conn = sqlite3.connect(DB_FILE); conn.row_factory = sqlite3.Row
+            rows = [dict(r) for r in conn.execute("SELECT * FROM chat_log ORDER BY id DESC LIMIT 50")]; conn.close()
+            self.kirim_json(rows)
+        else: self.send_response(404); self.end_headers()
+    def do_POST(self):
+        panjang = int(self.headers.get('Content-Length',0))
+        body = self.rfile.read(panjang).decode('utf-8') if panjang else '{}'
+        if self.path == '/api/daftar':
+            data = json.loads(body); lengkap = simpan(data)
+            self.kirim_json({"status":"ok","no_pendaftaran":lengkap['no_pendaftaran']})
+        elif self.path == '/api/ai-cs':
+            d = json.loads(body); self.kirim_json({"jawaban": ai_cs_jawab(d.get('pertanyaan',''), stat()["total"])})
+        elif self.path == '/api/ai-admin':
+            d = json.loads(body); self.kirim_json({"jawaban": ai_admin_jawab(d.get('pertanyaan',''))})
+        elif self.path == '/api/brosur':
+            d = json.loads(body)
+            conn = sqlite3.connect(DB_FILE)
+            conn.execute("UPDATE brosur SET aktif=0")
+            conn.execute("INSERT INTO brosur (judul, isi, biaya, syarat, jadwal, kontak, waktu, aktif) VALUES (?,?,?,?,?,?,?,1)",
+                (d.get('judul','Brosur Baru'), d.get('isi',''), d.get('biaya',''), d.get('syarat',''), d.get('jadwal',''), d.get('kontak',''), datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+            conn.commit(); conn.close()
+            buat_notif("BROSUR", "📄 Brosur Baru Disimpan", f"Judul: {d.get('judul')} - AI CS sekarang pakai brosur baru ini.")
+            self.kirim_json({"status":"ok"})
+        elif self.path == '/api/baca-notif':
+            conn = sqlite3.connect(DB_FILE); conn.execute("UPDATE notif SET sudah_dibaca=1"); conn.execute("UPDATE pendaftar SET status='DIBACA'"); conn.execute("UPDATE chat_log SET sudah_dibaca=1"); conn.commit(); conn.close()
+            self.kirim_json({"status":"ok"})
+        elif self.path == '/api/baca':
+            conn = sqlite3.connect(DB_FILE); conn.execute("UPDATE pendaftar SET status='DIBACA'"); conn.commit(); conn.close()
+            self.kirim_json({"status":"ok"})
+        else: self.send_response(404); self.end_headers()
+    def kirim_html(self, html):
+        b = html.encode('utf-8'); self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Content-Length',str(len(b))); self.end_headers(); self.wfile.write(b)
+    def kirim_json(self, obj):
+        b = json.dumps(obj, ensure_ascii=False).encode('utf-8'); self.send_response(200); self.send_header('Content-Type','application/json'); self.send_header('Content-Length',str(len(b))); self.end_headers(); self.wfile.write(b)
+    def log_message(self, format, *args): print(f"[{datetime.now().strftime('%H:%M:%S')}] {format % args}")
+
+print(f"✅ SERVER FINAL + AI CS + AI ADMIN + BROSUR 2027/2028 + NOTIF JALAN di port {PORT}")
+with socketserver.TCPServer(("", PORT), Handler) as httpd: httpd.serve_forever()
